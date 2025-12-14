@@ -1,0 +1,9 @@
+[objects]
+star-car.o
+
+[output]
+star-car.sms
+
+[libraries]
+
+[header]
