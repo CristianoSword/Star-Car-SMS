@@ -1,8 +1,8 @@
 [objects]
-star-car.o
+build\star-car.o
 
 [output]
-star-car.sms
+build\star-car.sms
 
 [libraries]
 
