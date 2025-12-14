@@ -1,6 +1,4 @@
 [objects]
 build\star-car.o
-[output]
-build\star-car.sms
+
 [libraries]
-[header]

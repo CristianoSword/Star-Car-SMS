@@ -7,7 +7,7 @@ echo.
 wla-z80 -o build\star-car.o src\star-car.asm
 if errorlevel 1 goto error
 
-wlalink linkfile build\star-car.sms
+wlalink -d -v -S linkfile build\star-car.sms
 if errorlevel 1 goto error
 
 echo.

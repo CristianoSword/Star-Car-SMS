@@ -58,51 +58,50 @@ ret                     ; Return from interrupt
 .org $0100
 
 main:
-    ld sp,$dff0         ; Initialize stack pointer
-
-    ; Initialize RAM
-    call init_ram
-
-    ; Initialize VDP
+    di                  ; Disable interrupts
+    ld sp,$dff0         ; Stack pointer
+    
+    ; 1. Initialize VDP (Display OFF)
     call init_vdp
-
-    ; Load tiles into VRAM
-    call load_tiles
-
-    ; Load palette
+    
+    ; 2. Load Palette (CRAM) - CRITICAL: Must use CRAM write command
     call load_palette
-
-    ; Draw road on name table
+    
+    ; 3. Load Tiles (VRAM)
+    call load_tiles
+    
+    ; 4. Draw Road (Name Table)
     call draw_road
-
-    ; Initialize game variables
+    
+    ; 5. Initialize Variables
     xor a
-    ld (scroll),a       ; Scroll starts at 0
-
-    ; Turn on display
-    ld a,%11100000      ; Display ON, frame interrupt ON
-    ld b,1              ; VDP register 1
+    ld (scroll),a
+    
+    ; 6. Turn ON Display
+    ; Reg 1: Display ON, V-Int ON, Mode 4 ($E0 = 11100000)
+    ld a,$E0
+    ld b,1
     call setreg
-
+    
     ei                  ; Enable interrupts
 
 ; ------------------------------------------------------------
 ; MAIN LOOP
 ; ------------------------------------------------------------
 mloop:
-    halt                ; Wait for V-blank (frame interrupt)
-
+    halt                ; Wait for V-blank
+    
     ; Update VDP with scroll buffer
-    ld a,(scroll)       ; Load scroll value
-    ld b,9              ; VDP register 9 (vertical scroll)
-    call setreg         ; Update VDP register
+    ld a,(scroll)
+    ld b,9              ; Reg 9: Vertical Scroll
+    call setreg
 
     ; Update scroll buffer (movement)
-    ld a,(scroll)       ; Load current scroll
-    sub vspeed          ; Subtract vertical speed
-    ld (scroll),a       ; Save new value
+    ld a,(scroll)
+    sub vspeed          ; Move up
+    ld (scroll),a
 
-    jp mloop            ; Infinite loop
+    jp mloop
 
 ; ------------------------------------------------------------
 ; SUBROUTINES
@@ -125,12 +124,12 @@ init_ram:
 init_vdp:
     ld hl,vdp_init_data
     ld b,11             ; 11 registers (0-10)
-    ld c,0              ; Register counter
+    ld c,0              ; Register counter (starts at 0)
 -:  ld a,(hl)
-    push bc
-    ld b,c
-    call setreg
-    pop bc
+    out ($bf),a         ; Send data
+    ld a,c
+    or $80              ; Set register write command bit
+    out ($bf),a         ; Send register index
     inc hl
     inc c
     djnz -
@@ -138,25 +137,25 @@ init_vdp:
 
 ; VDP initialization data
 vdp_init_data:
-.db %00000110           ; Reg 0: Mode control 1
-.db %10000000           ; Reg 1: Mode control 2 (display OFF)
-.db $ff                 ; Reg 2: Name table = $3800
-.db $ff                 ; Reg 3: Color table (not used)
-.db $ff                 ; Reg 4: Pattern table (not used)
-.db $ff                 ; Reg 5: Sprite attr table = $3f00
-.db $ff                 ; Reg 6: Sprite pattern table = $2000
-.db $00                 ; Reg 7: Border color (black)
-.db $00                 ; Reg 8: Scroll X = 0
-.db $00                 ; Reg 9: Scroll Y = 0
-.db $ff                 ; Reg 10: Line interrupt (disabled)
+.db %00000100           ; Reg 0: Mode 4
+.db %10000000           ; Reg 1: Display OFF, V-Int ON, Mode 4
+.db $0E                 ; Reg 2: Name Table ($3800)
+.db $FF                 ; Reg 3: Color Table (unused)
+.db $FF                 ; Reg 4: Pattern Gen (unused)
+.db $7E                 ; Reg 5: Sprite Attr ($3F00)
+.db $FB                 ; Reg 6: Sprite Patt ($2000)
+.db $00                 ; Reg 7: Border Color (Black)
+.db $00                 ; Reg 8: Scroll X
+.db $00                 ; Reg 9: Scroll Y
+.db $FF                 ; Reg 10: Line Int (OFF)
 
 ; Set VDP register
 ; A = value, B = register number
 setreg:
-    out ($bf),a         ; Send value
-    ld a,$80
-    or b
-    out ($bf),a         ; Send command
+    out ($bf),a
+    ld a,b
+    or $80
+    out ($bf),a
     ret
 
 ; Prepare VRAM for writing
@@ -186,10 +185,20 @@ load_tiles:
     jp nz,-
     ret
 
+; Prepare CRAM for writing (Palette)
+; HL = address in CRAM (usually $0000 for color 0)
+crampr:
+    ld a,l
+    out ($bf),a         ; Low byte of address
+    ld a,h
+    or $C0              ; Set bits 14 and 15 (CRAM write command)
+    out ($bf),a         ; High byte + command
+    ret
+
 ; Load palette
 load_palette:
-    ld hl,$c000         ; Palette address (CRAM)
-    call vrampr
+    ld hl,$0000         ; Palette index 0
+    call crampr
     
     ; Color palette (16 colors)
     ld hl,palette_data
@@ -202,9 +211,9 @@ load_palette:
 
 palette_data:
 .db $00                 ; Color 0: Transparent (black)
-.db $05                 ; Color 1: Dark purple
-.db $3f                 ; Color 2: White
-.db $15                 ; Color 3: Light purple
+.db $11                 ; Color 1: Dark Purple (R=1, G=0, B=1)
+.db $3F                 ; Color 2: White (R=3, G=3, B=3)
+.db $33                 ; Color 3: Light Purple (R=3, G=0, B=3)
 .db $00,$00,$00,$00     ; Colors 4-7 (not used)
 .db $00,$00,$00,$00     ; Colors 8-11 (not used)
 .db $00,$00,$00,$00     ; Colors 12-15 (not used)
@@ -219,36 +228,50 @@ draw_road:
     
     ; Left border (tile 3)
     ld a,3
-    out ($be),a
+    out ($be),a         ; Low byte (Tile Index)
+    xor a
+    out ($be),a         ; High byte (Attributes = 0)
     
     ; 6 road tiles (tile 1)
     ld c,6
 --: ld a,1
-    out ($be),a
+    out ($be),a         ; Low byte
+    xor a
+    out ($be),a         ; High byte
     dec c
     jp nz,--
     
     ; Center line (tile 2)
     ld a,2
-    out ($be),a
+    out ($be),a         ; Low byte
+    xor a
+    out ($be),a         ; High byte
+    
     ld a,2
-    out ($be),a
+    out ($be),a         ; Low byte
+    xor a
+    out ($be),a         ; High byte
     
     ; 6 road tiles (tile 1)
     ld c,6
 --: ld a,1
-    out ($be),a
+    out ($be),a         ; Low byte
+    xor a
+    out ($be),a         ; High byte
     dec c
     jp nz,--
     
     ; Right border (tile 3)
     ld a,3
-    out ($be),a
+    out ($be),a         ; Low byte
+    xor a
+    out ($be),a         ; High byte
     
-    ; Complete line with empty tiles
+    ; Complete line with empty tiles (tile 0)
     ld c,16
 --: xor a
-    out ($be),a
+    out ($be),a         ; Low byte (0)
+    out ($be),a         ; High byte (0)
     dec c
     jp nz,--
     
@@ -256,5 +279,14 @@ draw_road:
     djnz -
     ret
 
-; Include tiles
+; Include tiles (must be before header to fit in bank 0)
 .include "src/tiles.inc"
+
+; ------------------------------------------------------------
+; SMS HEADER (required at $7FF0-$7FFF)
+; ------------------------------------------------------------
+.org $7FF0
+.db "TMR SEGA"            ; Header signature
+.dw $0000                 ; Checksum (not used in homebrew)
+.db $00,$00,$00           ; Product code + version
+.db $4C                   ; Region code + ROM size ($4C = Export, 32KB)

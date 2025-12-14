@@ -1,0 +1,37 @@
+; this file was created with wlalink by ville helin <ville.helin@iki.fi>.
+; wla symbolic information for "build\star-car.sms".
+
+[information]
+version 3
+wlasymbol true
+
+[labels]
+00:0100 main
+00:011c mloop
+00:0130 init_ram
+00:0140 init_vdp
+00:0154 vdp_init_data
+00:015f setreg
+00:0167 vrampr
+00:0170 load_tiles
+00:018a crampr
+00:0193 load_palette
+00:01a5 palette_data
+00:01b5 draw_road
+00:0203 tiles
+00:0603 tiles_end
+
+[definitions]
+0000001c _sizeof_main
+00000014 _sizeof_mloop
+00000010 _sizeof_init_ram
+00000014 _sizeof_init_vdp
+0000000b _sizeof_vdp_init_data
+00000008 _sizeof_setreg
+00000009 _sizeof_vrampr
+0000001a _sizeof_load_tiles
+00000009 _sizeof_crampr
+00000012 _sizeof_load_palette
+00000010 _sizeof_palette_data
+0000004e _sizeof_draw_road
+00000400 _sizeof_tiles

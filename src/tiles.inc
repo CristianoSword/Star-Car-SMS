@@ -11,30 +11,30 @@ tiles:
 .db $00,$00,$00,$00,$00,$00,$00,$00
 .db $00,$00,$00,$00,$00,$00,$00,$00
 
-; Tile 1 - Road (dark purple)
-.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
+; Tile 1 - Road (Color 1 - Dark Purple)
+; 4 bytes per line: Plane 0, 1, 2, 3
+.rept 8
+.db $FF,$00,$00,$00  ; All pixels Color 1 (Binary 0001)
+.endr
 
-; Tile 2 - Road line (white)
-.db $18,$18,$18,$18,$18,$18,$18,$18
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
+; Tile 2 - Road line (Color 2 - White on Color 1 background)
+; Pixels: 1 1 1 2 2 1 1 1 (Center line)
+; Plane 0: 1 1 1 0 0 1 1 1 = $E7
+; Plane 1: 0 0 0 1 1 0 0 0 = $18
+.rept 8
+.db $E7,$18,$00,$00
+.endr
 
-; Tile 3 - Road border (light purple)
-.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
+; Tile 3 - Road border (Color 3 - Light Purple)
+; All pixels Color 3 (Binary 0011)
+.rept 8
+.db $FF,$FF,$00,$00
+.endr
 
-; Tiles 4-15: Reserved (empty for now)
+; Tiles 4-15: Reserved
 .rept 12
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
-.db $00,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00
+.db $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00
 .endr
 
 ; Tiles 16-31: Simple car 4x4 (white)
