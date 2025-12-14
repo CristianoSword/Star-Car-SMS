@@ -1,10 +1,10 @@
 @echo off
 echo ========================================
-echo   Compile STAR-CAR...
+echo   Compiling STAR-CAR...
 echo ========================================
 echo.
 
-wla-z80 -o src\star-car.asm build\star-car.o
+wla-z80 -o build\star-car.o src\star-car.asm
 if errorlevel 1 goto error
 
 wlalink -drvs linkfile build\star-car.sms
@@ -12,14 +12,17 @@ if errorlevel 1 goto error
 
 echo.
 echo ========================================
-echo   ROM create: star-car.sms
+echo   ROM created: build\star-car.sms
 echo ========================================
+echo.
+echo Running emulator...
+meka build\star-car.sms
 goto end
 
 :error
 echo.
 echo ========================================
-echo   ERROR compilation!
+echo   COMPILATION ERROR!
 echo ========================================
 
 :end
