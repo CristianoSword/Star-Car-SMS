@@ -257,4 +257,4 @@ draw_road:
     ret
 
 ; Include tiles
-.include "tiles.inc"
+.include "src/tiles.inc"
