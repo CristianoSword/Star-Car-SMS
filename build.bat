@@ -4,10 +4,10 @@ echo   Compile STAR-CAR...
 echo ========================================
 echo.
 
-wla-z80 -o star-car.asm star-car.o
+wla-z80 -o src\star-car.asm build\star-car.o
 if errorlevel 1 goto error
 
-wlalink -drvs linkfile star-car.sms
+wlalink -drvs linkfile build\star-car.sms
 if errorlevel 1 goto error
 
 echo.
