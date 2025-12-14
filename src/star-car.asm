@@ -1,5 +1,5 @@
 ; ============================================================
-; STAR-CAR - Step 1: Estrada com Scroll Vertical
+; STAR-CAR - Step 1: Road with Vertical Scroll
 ; ============================================================
 
 ; ------------------------------------------------------------
@@ -22,14 +22,14 @@ banks 1
 ; VARIABLES IN RAM
 ; ------------------------------------------------------------
 .enum $c000
-scroll  db              ; Buffer do scroll vertical (1 byte)
-input   db              ; Estado do controle do jogador
+scroll  db              ; Vertical scroll buffer (1 byte)
+input   db              ; Player controller state
 .ende
 
 ; ------------------------------------------------------------
 ; CONSTANTS
 ; ------------------------------------------------------------
-.equ vspeed 2           ; Velocidade vertical (scroll)
+.equ vspeed 2           ; Vertical speed (scroll)
 
 ; ------------------------------------------------------------
 ; ROM START
@@ -37,20 +37,20 @@ input   db              ; Estado do controle do jogador
 .bank 0 slot 0
 .org $0000
 
-; Reset - ponto de entrada
-di                      ; Desabilita interrupções
+; Reset - entry point
+di                      ; Disable interrupts
 im 1                    ; Interrupt mode 1
-jp main                 ; Pula para main
+jp main                 ; Jump to main
 
 ; ------------------------------------------------------------
 ; FRAME INTERRUPT (V-BLANK)
 ; ------------------------------------------------------------
 .org $0038
-ex af,af'               ; Salva acumulador em shadow register
-in a,($bf)              ; Lê VDP status / satisfaz interrupção
-ex af,af'               ; Restaura acumulador
-ei                      ; Reabilita interrupções
-ret                     ; Retorna da interrupção
+ex af,af'               ; Save accumulator in shadow register
+in a,($bf)              ; Read VDP status / satisfy interrupt
+ex af,af'               ; Restore accumulator
+ei                      ; Enable interrupts
+ret                     ; Return from interrupt
 
 ; ------------------------------------------------------------
 ; MAIN PROGRAM
@@ -58,60 +58,60 @@ ret                     ; Retorna da interrupção
 .org $0100
 
 main:
-    ld sp,$dff0         ; Inicializa stack pointer
+    ld sp,$dff0         ; Initialize stack pointer
 
-    ; Inicializa RAM
+    ; Initialize RAM
     call init_ram
 
-    ; Inicializa VDP
+    ; Initialize VDP
     call init_vdp
 
-    ; Carrega tiles na VRAM
+    ; Load tiles into VRAM
     call load_tiles
 
-    ; Carrega paleta
+    ; Load palette
     call load_palette
 
-    ; Desenha estrada no name table
+    ; Draw road on name table
     call draw_road
 
-    ; Inicializa variáveis do jogo
+    ; Initialize game variables
     xor a
-    ld (scroll),a       ; Scroll começa em 0
+    ld (scroll),a       ; Scroll starts at 0
 
-    ; Liga display
+    ; Turn on display
     ld a,%11100000      ; Display ON, frame interrupt ON
     ld b,1              ; VDP register 1
     call setreg
 
-    ei                  ; Habilita interrupções
+    ei                  ; Enable interrupts
 
 ; ------------------------------------------------------------
 ; MAIN LOOP
 ; ------------------------------------------------------------
 mloop:
-    halt                ; Aguarda V-blank (frame interrupt)
+    halt                ; Wait for V-blank (frame interrupt)
 
-    ; Atualiza VDP com buffer de scroll
-    ld a,(scroll)       ; Carrega valor do scroll
+    ; Update VDP with scroll buffer
+    ld a,(scroll)       ; Load scroll value
     ld b,9              ; VDP register 9 (vertical scroll)
-    call setreg         ; Atualiza registro da VDP
+    call setreg         ; Update VDP register
 
-    ; Atualiza buffer de scroll (movimento)
-    ld a,(scroll)       ; Carrega scroll atual
-    sub vspeed          ; Subtrai velocidade vertical
-    ld (scroll),a       ; Salva novo valor
+    ; Update scroll buffer (movement)
+    ld a,(scroll)       ; Load current scroll
+    sub vspeed          ; Subtract vertical speed
+    ld (scroll),a       ; Save new value
 
-    jp mloop            ; Loop infinito
+    jp mloop            ; Infinite loop
 
 ; ------------------------------------------------------------
 ; SUBROUTINES
 ; ------------------------------------------------------------
 
-; Inicializa RAM (limpa)
+; Initialize RAM (clear)
 init_ram:
-    ld hl,$c000         ; Início da RAM
-    ld bc,$2000         ; 8KB de RAM
+    ld hl,$c000         ; Start of RAM
+    ld bc,$2000         ; 8KB of RAM
     xor a               ; A = 0
 -:  ld (hl),a
     inc hl
@@ -121,11 +121,11 @@ init_ram:
     jp nz,-
     ret
 
-; Inicializa VDP (registros)
+; Initialize VDP (registers)
 init_vdp:
     ld hl,vdp_init_data
-    ld b,11             ; 11 registros (0-10)
-    ld c,0              ; Contador de registro
+    ld b,11             ; 11 registers (0-10)
+    ld c,0              ; Register counter
 -:  ld a,(hl)
     push bc
     ld b,c
@@ -136,47 +136,47 @@ init_vdp:
     djnz -
     ret
 
-; Dados de inicialização da VDP
+; VDP initialization data
 vdp_init_data:
 .db %00000110           ; Reg 0: Mode control 1
 .db %10000000           ; Reg 1: Mode control 2 (display OFF)
 .db $ff                 ; Reg 2: Name table = $3800
-.db $ff                 ; Reg 3: Color table (não usado)
-.db $ff                 ; Reg 4: Pattern table (não usado)
+.db $ff                 ; Reg 3: Color table (not used)
+.db $ff                 ; Reg 4: Pattern table (not used)
 .db $ff                 ; Reg 5: Sprite attr table = $3f00
 .db $ff                 ; Reg 6: Sprite pattern table = $2000
-.db $00                 ; Reg 7: Border color (preto)
+.db $00                 ; Reg 7: Border color (black)
 .db $00                 ; Reg 8: Scroll X = 0
 .db $00                 ; Reg 9: Scroll Y = 0
-.db $ff                 ; Reg 10: Line interrupt (desabilitado)
+.db $ff                 ; Reg 10: Line interrupt (disabled)
 
-; Define registro da VDP
-; A = valor, B = número do registro
+; Set VDP register
+; A = value, B = register number
 setreg:
-    out ($bf),a         ; Envia valor
+    out ($bf),a         ; Send value
     ld a,$80
     or b
-    out ($bf),a         ; Envia comando
+    out ($bf),a         ; Send command
     ret
 
-; Prepara VRAM para escrita
-; HL = endereço na VRAM
+; Prepare VRAM for writing
+; HL = address in VRAM
 vrampr:
     ld a,l
-    out ($bf),a         ; Byte baixo do endereço
+    out ($bf),a         ; Low byte of address
     ld a,h
-    or $40              ; Set bit 14 (comando de escrita)
-    out ($bf),a         ; Byte alto + comando
+    or $40              ; Set bit 14 (write command)
+    out ($bf),a         ; High byte + command
     ret
 
-; Carrega tiles na VRAM
+; Load tiles into VRAM
 load_tiles:
-    ld hl,$0000         ; Endereço destino na VRAM
+    ld hl,$0000         ; Destination address in VRAM
     call vrampr
     
-    ld hl,tiles         ; Origem dos dados
-    ld bc,tiles_end - tiles  ; Tamanho
-    ld de,$be           ; Porta de dados da VDP
+    ld hl,tiles         ; Source data
+    ld bc,tiles_end - tiles  ; Size
+    ld de,$be           ; VDP data port
 -:  ld a,(hl)
     out ($be),a
     inc hl
@@ -186,12 +186,12 @@ load_tiles:
     jp nz,-
     ret
 
-; Carrega paleta
+; Load palette
 load_palette:
-    ld hl,$c000         ; Endereço da paleta (CRAM)
+    ld hl,$c000         ; Palette address (CRAM)
     call vrampr
     
-    ; Paleta de cores (16 cores)
+    ; Color palette (16 colors)
     ld hl,palette_data
     ld b,16
 -:  ld a,(hl)
@@ -201,51 +201,51 @@ load_palette:
     ret
 
 palette_data:
-.db $00                 ; Cor 0: Transparente (preto)
-.db $05                 ; Cor 1: Roxo escuro
-.db $3f                 ; Cor 2: Branco
-.db $15                 ; Cor 3: Roxo claro
-.db $00,$00,$00,$00     ; Cores 4-7 (não usadas)
-.db $00,$00,$00,$00     ; Cores 8-11 (não usadas)
-.db $00,$00,$00,$00     ; Cores 12-15 (não usadas)
+.db $00                 ; Color 0: Transparent (black)
+.db $05                 ; Color 1: Dark purple
+.db $3f                 ; Color 2: White
+.db $15                 ; Color 3: Light purple
+.db $00,$00,$00,$00     ; Colors 4-7 (not used)
+.db $00,$00,$00,$00     ; Colors 8-11 (not used)
+.db $00,$00,$00,$00     ; Colors 12-15 (not used)
 
-; Desenha estrada no name table
+; Draw road on name table
 draw_road:
-    ld hl,$3800         ; Name table na VRAM
+    ld hl,$3800         ; Name table in VRAM
     call vrampr
     
-    ld b,28             ; 28 linhas de altura
+    ld b,28             ; 28 lines height
 -:  push bc
     
-    ; Borda esquerda (tile 3)
+    ; Left border (tile 3)
     ld a,3
     out ($be),a
     
-    ; 6 tiles da estrada (tile 1)
+    ; 6 road tiles (tile 1)
     ld c,6
 --: ld a,1
     out ($be),a
     dec c
     jp nz,--
     
-    ; Linha central (tile 2)
+    ; Center line (tile 2)
     ld a,2
     out ($be),a
     ld a,2
     out ($be),a
     
-    ; 6 tiles da estrada (tile 1)
+    ; 6 road tiles (tile 1)
     ld c,6
 --: ld a,1
     out ($be),a
     dec c
     jp nz,--
     
-    ; Borda direita (tile 3)
+    ; Right border (tile 3)
     ld a,3
     out ($be),a
     
-    ; Completar linha com tiles vazios
+    ; Complete line with empty tiles
     ld c,16
 --: xor a
     out ($be),a
@@ -256,7 +256,5 @@ draw_road:
     djnz -
     ret
 
-; Incluir tiles
+; Include tiles
 .include "tiles.inc"
-
-
