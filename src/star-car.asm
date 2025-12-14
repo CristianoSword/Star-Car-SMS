@@ -1,6 +1,5 @@
 ; ============================================================
-; RACER - Step 1: Estrada com Scroll Vertical
-; Tutorial baseado em SMS Power - Create a Racing Game
+; STAR-CAR - Step 1: Estrada com Scroll Vertical
 ; ============================================================
 
 ; ------------------------------------------------------------
@@ -259,4 +258,5 @@ draw_road:
 
 ; Incluir tiles
 .include "tiles.inc"
+
 
