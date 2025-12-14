@@ -7,7 +7,7 @@ echo.
 wla-z80 -o build\star-car.o src\star-car.asm
 if errorlevel 1 goto error
 
-wlalink -drvs linkfile build\star-car.sms
+wlalink linkfile build\star-car.sms
 if errorlevel 1 goto error
 
 echo.
@@ -15,8 +15,8 @@ echo ========================================
 echo   ROM created: build\star-car.sms
 echo ========================================
 echo.
-echo Running emulator...
-meka build\star-car.sms
+echo File size:
+dir build\star-car.sms | find "star-car.sms"
 goto end
 
 :error
