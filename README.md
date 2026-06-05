@@ -21,7 +21,7 @@ Work in progress — the project already compiles and includes:
 - Initial tileset / graphics
 - Gameplay (coming eventually)
 
-> There's still a lot to do, but I'll get back to it when I have the time and patience.
+> There's still a lot to do, but I'll get back to it when I have the time and patience. Both are currently missing xD
 
 ## Screenshot
 
