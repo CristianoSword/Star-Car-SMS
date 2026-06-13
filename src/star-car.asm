@@ -21,7 +21,24 @@ banks 1
 ; ------------------------------------------------------------
 ; VARIABLES IN RAM
 ; ------------------------------------------------------------
-.enum $c000
+.equ highvp $c000          ; Primeiro vpos do hi-score
+.equ scorvp $c004          ; Primeiro vpos do score
+.equ plrvp  $c008          ; Primeiro vpos do player
+.equ maevp  $c018          ; Primeiro vpos da Mae
+.equ ashvp  $c028          ; Primeiro vpos do Ash
+
+.equ highhp $c080          ; Primeiro hpos do hi-score
+.equ highcc $c081          ; Primeiro char code do hi-score
+.equ scorhp $c088          ; Primeiro hpos do score
+.equ scorcc $c089          ; Primeiro char code do score
+.equ plrhp  $c090          ; Primeiro hpos do player
+.equ plrcc  $c091          ; Primeiro char code do player
+.equ maehp  $c0b0          ; Primeiro hpos da Mae
+.equ maecc  $c0b1          ; Primeiro char code da Mae
+.equ ashhp  $c0d0          ; Primeiro hpos do Ash
+.equ ashcc  $c0d1          ; Primeiro char code do Ash
+
+.enum $c100
 scroll  db              ; Vertical scroll buffer (1 byte)
 input   db              ; Player controller state
 oldinp  db              ; Estado anterior do controle
@@ -49,8 +66,6 @@ maedel  db              ; Delay before second enemy becomes visible
 maedir  db              ; Enemy direction (0=left, 1=right)
 maey    db              ; Enemy Y position
 maex    db              ; Enemy X position
-saty    ds 64           ; Sprite Y buffer (64 sprites max)
-satxt   ds 128          ; Sprite X/tile buffer
 .ende
 
 ; ------------------------------------------------------------
@@ -101,17 +116,6 @@ satxt   ds 128          ; Sprite X/tile buffer
 .equ tile_dash 57
 
 ; SAT buffer map for the player car (first 16 sprites)
-.equ plrvp saty
-.equ plrhp satxt
-.equ plrcc satxt+1
-.equ ashvp saty+16
-.equ ashhp satxt+32
-.equ ashcc satxt+33
-.equ maevp saty+32
-.equ maehp satxt+64
-.equ maecc satxt+65
-.equ hudvp saty+48
-.equ hudxt satxt+96
 
 ; ------------------------------------------------------------
 ; ROM START
@@ -386,7 +390,7 @@ move_done:
 
 ; Clear SAT buffer: hide all sprites, clear X/tile area
 clear_sat:
-    ld hl,saty
+    ld hl,highvp
     ld b,64
     ld a,$d0
 clear_sat_y:
@@ -394,7 +398,7 @@ clear_sat_y:
     inc hl
     djnz clear_sat_y
 
-    ld hl,satxt
+    ld hl,highhp
     ld b,128
     xor a
 clear_sat_xt:
@@ -434,8 +438,8 @@ load_carcc_loop:
 ; Inicializa as posições fixas do HUD em sprites
 init_hud:
     ld hl,hud_y_data
-    ld de,hudvp
-    ld b,12
+    ld de,highvp
+    ld b,8
 init_hud_y_loop:
     ld a,(hl)
     ld (de),a
@@ -444,8 +448,8 @@ init_hud_y_loop:
     djnz init_hud_y_loop
 
     ld hl,hud_xc_data
-    ld de,hudxt
-    ld b,24
+    ld de,highhp
+    ld b,16
 init_hud_xc_loop:
     ld a,(hl)
     ld (de),a
@@ -458,29 +462,29 @@ init_hud_xc_loop:
 update_hud:
     ld a,(hisc3)
     add a,tile_digit0
-    ld (hudxt+5),a
+    ld (highcc+0),a
     ld a,(hisc2)
     add a,tile_digit0
-    ld (hudxt+7),a
+    ld (highcc+2),a
     ld a,(hisc1)
     add a,tile_digit0
-    ld (hudxt+9),a
+    ld (highcc+4),a
     ld a,(hisc0)
     add a,tile_digit0
-    ld (hudxt+11),a
+    ld (highcc+6),a
 
     ld a,(score3)
     add a,tile_digit0
-    ld (hudxt+17),a
+    ld (scorcc+0),a
     ld a,(score2)
     add a,tile_digit0
-    ld (hudxt+19),a
+    ld (scorcc+2),a
     ld a,(score1)
     add a,tile_digit0
-    ld (hudxt+21),a
+    ld (scorcc+4),a
     ld a,(score0)
     add a,tile_digit0
-    ld (hudxt+23),a
+    ld (scorcc+6),a
     ret
 
 ; Atualiza score em BCD
@@ -613,7 +617,7 @@ upbuf:
     call carx
 
     ld a,$d0
-    ld (saty+60),a       ; Terminador após sprites do HUD
+    ld (ashvp+16),a      ; Terminador após hi, score, player, Mae e Ash
     ret
 
 ; Despacha a lógica conforme o estado atual
@@ -733,6 +737,12 @@ prep_play:
     xor a
     ld (scroll),a
     call draw_road
+    ld hl,$3820
+    ld de,txt_hi
+    call draw_text
+    ld hl,$38c0
+    ld de,txt_sc
+    call draw_text
     call start_sfx_start
     call upbuf
     ret
@@ -822,14 +832,14 @@ ldsat:
     call vrampr
     ld b,64
     ld c,$be
-    ld hl,saty
+    ld hl,highvp
     otir
 
     ld hl,$3f80
     call vrampr
     ld b,128
     ld c,$be
-    ld hl,satxt
+    ld hl,highhp
     otir
     ret
 
@@ -1125,12 +1135,12 @@ draw_road:
     ret
 
 hud_y_data:
-.db 8,8,8,8,8,8
-.db 24,24,24,24,24,24
+.db 8,8,8,8
+.db 24,24,24,24
 
 hud_xc_data:
-.db 136,tile_h,144,tile_i,160,tile_digit0,168,tile_digit0,176,tile_digit0,184,tile_digit0
-.db 136,tile_s,144,tile_c,160,tile_digit0,168,tile_digit0,176,tile_digit0,184,tile_digit0
+.db 152,tile_digit0,160,tile_digit0,168,tile_digit0,176,tile_digit0
+.db 152,tile_digit0,160,tile_digit0,168,tile_digit0,176,tile_digit0
 
 title_starcar:
 .db tile_s,tile_t,tile_a,tile_r,tile_dash,tile_c,tile_a,tile_r,$ff
@@ -1146,6 +1156,12 @@ txt_game:
 
 txt_over:
 .db tile_o,tile_v,tile_e,tile_r,$ff
+
+txt_hi:
+.db tile_h,tile_i,$ff
+
+txt_sc:
+.db tile_s,tile_c,$ff
 
 car_tiles:
 .db 16,17,18,19
