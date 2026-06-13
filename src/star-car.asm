@@ -1049,9 +1049,9 @@ load_palette:
     ld hl,$0000         ; Palette index 0
     call crampr
     
-    ; Color palette (16 colors)
+    ; Carrega as duas paletas: fundo e sprites
     ld hl,palette_data
-    ld b,16
+    ld b,32
 -:  ld a,(hl)
     out ($be),a
     inc hl
@@ -1066,6 +1066,13 @@ palette_data:
 .db $00,$00,$00,$00     ; Colors 4-7 (not used)
 .db $00,$00,$00,$00     ; Colors 8-11 (not used)
 .db $00,$00,$00,$00     ; Colors 12-15 (not used)
+.db $00                 ; Sprite color 0: transparência
+.db $33                 ; Sprite color 1: magenta
+.db $1B                 ; Sprite color 2: coral
+.db $22                 ; Sprite color 3: roxo
+.db $00,$00,$00,$00     ; Sprite colors 4-7
+.db $00,$00,$00,$00     ; Sprite colors 8-11
+.db $00,$00,$00,$00     ; Sprite colors 12-15
 
 ; Draw road on name table
 draw_road:

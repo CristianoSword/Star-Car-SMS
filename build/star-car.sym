@@ -85,20 +85,20 @@ wlasymbol true
 00:0690 crampr
 00:0699 load_palette
 00:06ab palette_data
-00:06bb draw_road
-00:0709 hud_y_data
-00:0711 hud_xc_data
-00:0721 title_starcar
-00:072a title_press1
-00:0732 txt_ready
-00:0738 txt_game
-00:073d txt_over
-00:0742 txt_hi
-00:0745 txt_sc
-00:0748 car_tiles
-00:0758 invcar
-00:0768 tiles
-00:0ea8 tiles_end
+00:06cb draw_road
+00:0719 hud_y_data
+00:0721 hud_xc_data
+00:0731 title_starcar
+00:073a title_press1
+00:0742 txt_ready
+00:0748 txt_game
+00:074d txt_over
+00:0752 txt_hi
+00:0755 txt_sc
+00:0758 car_tiles
+00:0768 invcar
+00:0778 tiles
+00:0eb8 tiles_end
 
 [definitions]
 00000027 _sizeof_main
@@ -179,7 +179,7 @@ wlasymbol true
 00000017 _sizeof_load_sprite_tiles
 00000009 _sizeof_crampr
 00000012 _sizeof_load_palette
-00000010 _sizeof_palette_data
+00000020 _sizeof_palette_data
 0000004e _sizeof_draw_road
 00000008 _sizeof_hud_y_data
 00000010 _sizeof_hud_xc_data
