@@ -737,12 +737,6 @@ prep_play:
     xor a
     ld (scroll),a
     call draw_road
-    ld hl,$3820
-    ld de,txt_hi
-    call draw_text
-    ld hl,$38c0
-    ld de,txt_sc
-    call draw_text
     call start_sfx_start
     call upbuf
     ret
