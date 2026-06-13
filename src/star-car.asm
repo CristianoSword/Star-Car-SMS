@@ -1072,7 +1072,7 @@ draw_road:
     ld hl,$3800         ; Name table in VRAM
     call vrampr
     
-    ld b,28             ; 28 lines height
+    ld b,32             ; 32 linhas para o scroll vertical não revelar lixo
 -:  push bc
     
     ; Left border (tile 3)
