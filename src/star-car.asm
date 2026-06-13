@@ -24,7 +24,22 @@ banks 1
 .enum $c000
 scroll  db              ; Vertical scroll buffer (1 byte)
 input   db              ; Player controller state
+oldinp  db              ; Estado anterior do controle
 status  db              ; Last VDP status read in interrupt
+vblank  db              ; Flag de frame pronto
+gstate  db              ; Estado atual do jogo
+gtimer  db              ; Temporizador do estado atual
+score0  db              ; Score: unidades
+score1  db              ; Score: dezenas
+score2  db              ; Score: centenas
+score3  db              ; Score: milhares
+hisc0   db              ; Hi-score: unidades
+hisc1   db              ; Hi-score: dezenas
+hisc2   db              ; Hi-score: centenas
+hisc3   db              ; Hi-score: milhares
+scdiv   db              ; Divisor para ritmo do score
+sfxid   db              ; Efeito sonoro atual
+sfxtim  db              ; Duração restante do efeito sonoro
 plx     db              ; Player X position
 ply     db              ; Player Y position
 ashdir  db              ; Enemy direction (0=left, 1=right)
@@ -55,6 +70,35 @@ satxt   ds 128          ; Sprite X/tile buffer
 .equ maeini_y 88        ; Initial second enemy Y
 .equ maeini_dir 0       ; Second enemy starts moving left
 .equ maewait 96         ; Delay before second enemy appears
+.equ sctick 6           ; Quantos frames por ponto de score
+.equ deadwait 90        ; Duração da tela de morte
+
+.equ st_title 0         ; Tela inicial
+.equ st_ready 1         ; Tela pronta para iniciar
+.equ st_play 2          ; Gameplay ativo
+.equ st_dead 3          ; Tela de morte
+
+.equ sfx_none 0         ; Sem efeito sonoro
+.equ sfx_start 1        ; Bip de início
+.equ sfx_crash 2        ; Bip de colisão
+
+.equ tile_digit0 32     ; Primeiro tile de dígito
+.equ tile_h 42          ; Letras do HUD
+.equ tile_i 43
+.equ tile_s 44
+.equ tile_c 45
+.equ tile_a 46          ; Letras da UI
+.equ tile_d 47
+.equ tile_e 48
+.equ tile_g 49
+.equ tile_m 50
+.equ tile_o 51
+.equ tile_p 52
+.equ tile_r 53
+.equ tile_t 54
+.equ tile_v 55
+.equ tile_y 56
+.equ tile_dash 57
 
 ; SAT buffer map for the player car (first 16 sprites)
 .equ plrvp saty
@@ -66,6 +110,8 @@ satxt   ds 128          ; Sprite X/tile buffer
 .equ maevp saty+32
 .equ maehp satxt+64
 .equ maecc satxt+65
+.equ hudvp saty+48
+.equ hudxt satxt+96
 
 ; ------------------------------------------------------------
 ; ROM START
@@ -85,9 +131,15 @@ jp main                 ; Jump to main
 ex af,af'               ; Save accumulator in shadow register
 in a,($bf)              ; Read VDP status / satisfy interrupt
 ld (status),a           ; Mirror status for later collision/debug use
+ld a,1
+ld (vblank),a           ; Sinaliza que um frame começou
 ex af,af'               ; Restore accumulator
 ei                      ; Enable interrupts
 ret                     ; Return from interrupt
+
+; NMI do botão Pause: apenas retorna
+.org $0066
+retn
 
 ; ------------------------------------------------------------
 ; MAIN PROGRAM
@@ -98,6 +150,7 @@ main:
     di                  ; Disable interrupts
     ld sp,$dff0         ; Stack pointer
     call init_ram       ; Clear RAM used by buffers and variables
+    call psg_silence    ; Garante áudio desligado no boot
     
     ; 1. Initialize VDP (Display OFF)
     call init_vdp
@@ -114,7 +167,7 @@ main:
     
     ; 5. Initialize game variables and sprite buffer
     call init_game
-    call ldsat
+    call prep_title
     
     ; 6. Turn ON Display
     ; Reg 1: Display ON, V-Int ON, Mode 4 ($E0 = 11100000)
@@ -128,7 +181,7 @@ main:
 ; MAIN LOOP
 ; ------------------------------------------------------------
 mloop:
-    halt                ; Wait for V-blank
+    call wait_vblank    ; Espera um frame real
     
     ; Push sprite buffer and scroll during vblank
     call ldsat
@@ -136,21 +189,10 @@ mloop:
     ld b,9              ; Reg 9: Vertical Scroll
     call setreg
 
-    ; Read input and update gameplay state in RAM
-    call check_collision
     call getkey
-    call move_player
-    ld ix,ashdir
-    call enemy
-    ld ix,maedir
-    call enemy
-    call handle_mae
-    call upbuf
-
-    ; Update scroll buffer (movement)
-    ld a,(scroll)
-    sub vspeed          ; Move up
-    ld (scroll),a
+    call update_sfx
+    call run_state
+    call sync_input
 
     jp mloop
 
@@ -223,9 +265,17 @@ vrampr:
 init_game:
     xor a
     ld (scroll),a
+    ld (oldinp),a
+    ld (gstate),a
+    ld (gtimer),a
+    ld (sfxid),a
+    ld (sfxtim),a
     call reset_round
     call clear_sat
     call init_car_tiles
+    call init_hud
+    call reset_score
+    call update_hud
     call upbuf
     ret
 
@@ -253,10 +303,55 @@ reset_round:
     ld (maex),a
     ret
 
+; Zera o score atual
+reset_score:
+    xor a
+    ld (score0),a
+    ld (score1),a
+    ld (score2),a
+    ld (score3),a
+    ld a,sctick
+    ld (scdiv),a
+    ret
+
+; Mantém o espelho do input para detectar borda do botão
+sync_input:
+    ld a,(input)
+    ld (oldinp),a
+    ret
+
+; Testa borda de descida do botão 1 (ativo em zero)
+btn1_edge:
+    ld a,(input)
+    bit 4,a
+    jp nz,btn1_no
+
+    ld a,(oldinp)
+    bit 4,a
+    jp z,btn1_no
+
+    ld a,1
+    ret
+
+btn1_no:
+    xor a
+    ret
+
 ; Read controller 1
 getkey:
     in a,($dc)
     ld (input),a
+    ret
+
+; Espera até o frame interrupt sinalizar vblank
+wait_vblank:
+    xor a
+    ld (vblank),a
+wait_vblank_loop:
+    halt
+    ld a,(vblank)
+    or a
+    jp z,wait_vblank_loop
     ret
 
 ; Move player left/right inside the road bounds
@@ -336,6 +431,161 @@ load_carcc_loop:
     djnz load_carcc_loop
     ret
 
+; Inicializa as posições fixas do HUD em sprites
+init_hud:
+    ld hl,hud_y_data
+    ld de,hudvp
+    ld b,12
+init_hud_y_loop:
+    ld a,(hl)
+    ld (de),a
+    inc hl
+    inc de
+    djnz init_hud_y_loop
+
+    ld hl,hud_xc_data
+    ld de,hudxt
+    ld b,24
+init_hud_xc_loop:
+    ld a,(hl)
+    ld (de),a
+    inc hl
+    inc de
+    djnz init_hud_xc_loop
+    ret
+
+; Atualiza os dígitos do hi-score e do score atual
+update_hud:
+    ld a,(hisc3)
+    add a,tile_digit0
+    ld (hudxt+5),a
+    ld a,(hisc2)
+    add a,tile_digit0
+    ld (hudxt+7),a
+    ld a,(hisc1)
+    add a,tile_digit0
+    ld (hudxt+9),a
+    ld a,(hisc0)
+    add a,tile_digit0
+    ld (hudxt+11),a
+
+    ld a,(score3)
+    add a,tile_digit0
+    ld (hudxt+17),a
+    ld a,(score2)
+    add a,tile_digit0
+    ld (hudxt+19),a
+    ld a,(score1)
+    add a,tile_digit0
+    ld (hudxt+21),a
+    ld a,(score0)
+    add a,tile_digit0
+    ld (hudxt+23),a
+    ret
+
+; Atualiza score em BCD
+step_score:
+    ld a,(scdiv)
+    dec a
+    ld (scdiv),a
+    ret nz
+
+    ld a,sctick
+    ld (scdiv),a
+
+    ld a,(score0)
+    inc a
+    cp 10
+    jp c,score_store0
+    xor a
+    ld (score0),a
+
+    ld a,(score1)
+    inc a
+    cp 10
+    jp c,score_store1
+    xor a
+    ld (score1),a
+
+    ld a,(score2)
+    inc a
+    cp 10
+    jp c,score_store2
+    xor a
+    ld (score2),a
+
+    ld a,(score3)
+    inc a
+    cp 10
+    jp c,score_store3
+    ld a,9
+    ld (score0),a
+    ld (score1),a
+    ld (score2),a
+
+score_store3:
+    ld (score3),a
+    jp score_done
+
+score_store2:
+    ld (score2),a
+    jp score_done
+
+score_store1:
+    ld (score1),a
+    jp score_done
+
+score_store0:
+    ld (score0),a
+
+score_done:
+    call sync_hiscore
+    call update_hud
+    ret
+
+; Atualiza o hi-score se o score atual passou
+sync_hiscore:
+    ld a,(score3)
+    ld b,a
+    ld a,(hisc3)
+    cp b
+    jp c,copy_hiscore
+    jp nz,no_hiscore
+
+    ld a,(score2)
+    ld b,a
+    ld a,(hisc2)
+    cp b
+    jp c,copy_hiscore
+    jp nz,no_hiscore
+
+    ld a,(score1)
+    ld b,a
+    ld a,(hisc1)
+    cp b
+    jp c,copy_hiscore
+    jp nz,no_hiscore
+
+    ld a,(score0)
+    ld b,a
+    ld a,(hisc0)
+    cp b
+    jp c,copy_hiscore
+
+no_hiscore:
+    ret
+
+copy_hiscore:
+    ld a,(score0)
+    ld (hisc0),a
+    ld a,(score1)
+    ld (hisc1),a
+    ld a,(score2)
+    ld (hisc2),a
+    ld a,(score3)
+    ld (hisc3),a
+    ret
+
 ; Update SAT buffer from player and enemy coordinates
 upbuf:
     ld a,(ply)
@@ -363,18 +613,149 @@ upbuf:
     call carx
 
     ld a,$d0
-    ld (saty+48),a       ; Terminator after player + two enemy cars
+    ld (saty+60),a       ; Terminador após sprites do HUD
     ret
 
-; Reset the round when sprites collide
+; Despacha a lógica conforme o estado atual
+run_state:
+    ld a,(gstate)
+    cp st_title
+    jp z,state_title
+    cp st_ready
+    jp z,state_ready
+    cp st_play
+    jp z,state_play
+    jp state_dead
+
+; Tela inicial
+state_title:
+    xor a
+    ld (scroll),a
+    call btn1_edge
+    or a
+    ret z
+    call prep_ready
+    ret
+
+; Tela antes da corrida
+state_ready:
+    xor a
+    ld (scroll),a
+    call btn1_edge
+    or a
+    ret z
+    call prep_play
+    ret
+
+; Gameplay principal
+state_play:
+    call check_collision
+    ld a,(gstate)
+    cp st_play
+    ret nz
+
+    call move_player
+    ld ix,ashdir
+    call enemy
+    ld ix,maedir
+    call enemy
+    call handle_mae
+    call step_score
+    call upbuf
+
+    ld a,(scroll)
+    sub vspeed
+    ld (scroll),a
+    ret
+
+; Tela de morte com retorno automático
+state_dead:
+    xor a
+    ld (scroll),a
+    ld a,(gtimer)
+    or a
+    jp z,dead_to_title
+    dec a
+    ld (gtimer),a
+    ret
+
+dead_to_title:
+    call prep_title
+    ret
+
+; Prepara a tela inicial
+prep_title:
+    xor a
+    ld (gstate),a
+    ld (scroll),a
+    call reset_round
+    ld a,$ff
+    ld (maedel),a
+    call init_car_tiles
+    ld hl,car_tiles
+    ld de,maecc
+    call load_carcc
+    ld a,48
+    ld (plx),a
+    ld a,128
+    ld (ply),a
+    ld a,24
+    ld (ashx),a
+    ld a,48
+    ld (ashy),a
+    ld a,72
+    ld (maex),a
+    ld a,88
+    ld (maey),a
+    call draw_title_screen
+    call update_hud
+    call upbuf
+    ret
+
+; Prepara a tela de ready e um novo jogo
+prep_ready:
+    ld a,st_ready
+    ld (gstate),a
+    xor a
+    ld (scroll),a
+    call reset_round
+    call reset_score
+    call init_car_tiles
+    call draw_ready_screen
+    call update_hud
+    call upbuf
+    ret
+
+; Entra em gameplay
+prep_play:
+    ld a,st_play
+    ld (gstate),a
+    xor a
+    ld (scroll),a
+    call draw_road
+    call start_sfx_start
+    call upbuf
+    ret
+
+; Prepara a tela de morte
+prep_dead:
+    ld a,st_dead
+    ld (gstate),a
+    ld a,deadwait
+    ld (gtimer),a
+    xor a
+    ld (scroll),a
+    call draw_dead_screen
+    call start_sfx_crash
+    ret
+
+; Detecta colisão e troca de estado
 check_collision:
     ld a,(status)
     bit 5,a
     ret z
 
-    call reset_round
-    call init_car_tiles
-    call upbuf
+    call prep_dead
     ret
 
 ; Handle delayed visibility of the second enemy
@@ -497,6 +878,123 @@ enemy_vertical:
     xor a
 enemy_store_y:
     ld (ix+1),a
+    ret
+
+; Limpa toda a name table
+clear_name_table:
+    ld hl,$3800
+    call vrampr
+    ld bc,$0700
+clear_name_loop:
+    xor a
+    out ($be),a
+    dec bc
+    ld a,b
+    or c
+    jp nz,clear_name_loop
+    ret
+
+; Desenha uma string terminada em $ff na VRAM
+; HL = endereço na VRAM, DE = ponteiro da string
+draw_text:
+    call vrampr
+draw_text_loop:
+    ld a,(de)
+    cp $ff
+    ret z
+    out ($be),a
+    xor a
+    out ($be),a
+    inc de
+    jp draw_text_loop
+
+; Tela inicial
+draw_title_screen:
+    call clear_name_table
+    call draw_road
+    ld hl,$3924
+    ld de,title_starcar
+    call draw_text
+    ld hl,$3a64
+    ld de,title_press1
+    call draw_text
+    ret
+
+; Tela de pronta para iniciar
+draw_ready_screen:
+    call clear_name_table
+    call draw_road
+    ld hl,$3a26
+    ld de,txt_ready
+    call draw_text
+    ld hl,$3b64
+    ld de,title_press1
+    call draw_text
+    ret
+
+; Tela de game over
+draw_dead_screen:
+    call clear_name_table
+    call draw_road
+    ld hl,$3a28
+    ld de,txt_game
+    call draw_text
+    ld hl,$3aa8
+    ld de,txt_over
+    call draw_text
+    ret
+
+; Desliga todos os canais do PSG
+psg_silence:
+    ld a,$9f
+    out ($7f),a
+    ld a,$bf
+    out ($7f),a
+    ld a,$df
+    out ($7f),a
+    ld a,$ff
+    out ($7f),a
+    ret
+
+; Inicia um bip curto de start
+start_sfx_start:
+    call psg_silence
+    ld a,sfx_start
+    ld (sfxid),a
+    ld a,10
+    ld (sfxtim),a
+    ld a,$80
+    out ($7f),a
+    ld a,$04
+    out ($7f),a
+    ld a,$94
+    out ($7f),a
+    ret
+
+; Inicia um ruído simples de colisão
+start_sfx_crash:
+    call psg_silence
+    ld a,sfx_crash
+    ld (sfxid),a
+    ld a,18
+    ld (sfxtim),a
+    ld a,$e6
+    out ($7f),a
+    ld a,$f2
+    out ($7f),a
+    ret
+
+; Conta o tempo do efeito atual
+update_sfx:
+    ld a,(sfxtim)
+    or a
+    ret z
+    dec a
+    ld (sfxtim),a
+    ret nz
+    xor a
+    ld (sfxid),a
+    call psg_silence
     ret
 
 ; Load tiles into VRAM
@@ -625,6 +1123,29 @@ draw_road:
     pop bc
     djnz -
     ret
+
+hud_y_data:
+.db 8,8,8,8,8,8
+.db 24,24,24,24,24,24
+
+hud_xc_data:
+.db 136,tile_h,144,tile_i,160,tile_digit0,168,tile_digit0,176,tile_digit0,184,tile_digit0
+.db 136,tile_s,144,tile_c,160,tile_digit0,168,tile_digit0,176,tile_digit0,184,tile_digit0
+
+title_starcar:
+.db tile_s,tile_t,tile_a,tile_r,tile_dash,tile_c,tile_a,tile_r,$ff
+
+title_press1:
+.db tile_p,tile_r,tile_e,tile_s,tile_s,0,tile_digit0+1,$ff
+
+txt_ready:
+.db tile_r,tile_e,tile_a,tile_d,tile_y,$ff
+
+txt_game:
+.db tile_g,tile_a,tile_m,tile_e,$ff
+
+txt_over:
+.db tile_o,tile_v,tile_e,tile_r,$ff
 
 car_tiles:
 .db 16,17,18,19
